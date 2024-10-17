@@ -1,66 +1,80 @@
-#include <ESP8266WiFi.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <WiFi.h>
+#include <WiFiClient.h>
 
-#define ONE_WIRE_BUS 2  // Change pin if necessary
-
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
-
+// WiFi credentials
 const char* ssid = "Casa";
-const char* password = "girassol897";
-const char* host = "api.thingspeak.com";
-const char* api_key = "M1NN8ZTWIDRGCPWO";
+const char* senha = "girassol897";
 
-void setup() {
-  Serial.begin(115200);
-  sensors.begin();
+// ThingSpeak settings
+const char *host = "api.thingspeak.com";
+const int httpPort = 80; 
+const String channelID = "2479418";
+const String writeApiKey = "M1NN8ZTWIDRGCPWO";
 
+// Sensor setup
+OneWire oneWire(4); 
+DallasTemperature Sensor(&oneWire);
+float leitura; 
+
+// Function to send data to ThingSpeak
+void sendDataToThingSpeak(float temperature) {
   // Connect to WiFi
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-  Serial.println("Connected to WiFi");
-}
-
-void loop() {
-  sensors.requestTemperatures();
-  float tempC = sensors.getTempCByIndex(0);
-
-  if (isnan(tempC)) {
-    Serial.println("Failed to read temperature");
-    return;
-  }
-
-  Serial.print("Temperature: ");
-  Serial.println(tempC);
-
   WiFiClient client;
-  if (!client.connect(host, 80)) {
-    Serial.println("Connection to ThingSpeak failed");
+  if (!client.connect(host, httpPort)) {
+    Serial.println("Connection to ThingSpeak failed!");
     return;
   }
 
-  String url = "/update?api_key=" + String(api_key) + "&field1=" + String(tempC);
+  // Construct the HTTP request
+  String url = "/update?api_key=";
+  url += writeApiKey;
+  url += "&field1=";
+  url += temperature; 
 
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+  // Send the HTTP request
+  client.print("GET " + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n\r\n");
 
-  Serial.println("Data sent to ThingSpeak");
-
-  // Wait for response and print it
-  while (client.connected() || client.available()) {
-    if (client.available()) {
-      String line = client.readStringUntil('\n');
-      Serial.println(line);
-    }
+  // Wait for response and print it (for debugging)
+  while (client.connected()) {
+    String line = client.readStringUntil('\n');
+    Serial.println(line); 
   }
 
+  // Close connection
   client.stop();
-  Serial.println("Connection closed");
+}
 
-  delay(60000); // Wait before sending the next reading
+void setup() {
+  Serial.begin(115200);
+  while (!Serial) { delay(100); } 
+
+  Serial.println("Connecting to WiFi...");
+  WiFi.begin(ssid, senha);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Initialize temperature sensor
+  Sensor.begin(); 
+}
+
+void loop() {
+  Sensor.requestTemperatures(); 
+  leitura = Sensor.getTempCByIndex(0);
+
+  Serial.print("Temperature: ");
+  Serial.print(leitura);
+  Serial.println(" C");
+
+  sendDataToThingSpeak(leitura); 
+
+  delay(5000); // Wait for 20 seconds before the next reading 
 }
