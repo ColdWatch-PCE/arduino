@@ -18,51 +18,55 @@ OneWire oneWire(4);
 DallasTemperature Sensor(&oneWire);
 float leitura; 
 
+// Function to connect to WiFi (with reconnection attempts)
+void connectToWiFi() {
+  Serial.print("Connecting to WiFi ");
+  WiFi.begin(ssid, senha);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+
+  Serial.println("\nWiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
 // Function to send data to ThingSpeak
 void sendDataToThingSpeak(float temperature) {
-  // Connect to WiFi
+  // Ensure WiFi connection before sending data
+  if (WiFi.status() != WL_CONNECTED) {
+    connectToWiFi(); 
+  }
+
   WiFiClient client;
   if (!client.connect(host, httpPort)) {
     Serial.println("Connection to ThingSpeak failed!");
     return;
   }
 
-  // Construct the HTTP request
   String url = "/update?api_key=";
   url += writeApiKey;
   url += "&field1=";
   url += temperature; 
 
-  // Send the HTTP request
   client.print("GET " + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n\r\n");
 
-  // Wait for response and print it (for debugging)
   while (client.connected()) {
     String line = client.readStringUntil('\n');
-    Serial.println(line); 
+    // Serial.println(line); // Uncomment for debugging 
   }
 
-  // Close connection
   client.stop();
 }
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) { delay(100); } 
-
-  Serial.println("Connecting to WiFi...");
-  WiFi.begin(ssid, senha);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi connected");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  // Initialize temperature sensor
+  connectToWiFi();
   Sensor.begin(); 
 }
 
@@ -76,5 +80,5 @@ void loop() {
 
   sendDataToThingSpeak(leitura); 
 
-  delay(5000); // Wait for 20 seconds before the next reading 
+  delay(20000); // Wait for 20 seconds before the next reading
 }
